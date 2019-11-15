@@ -1,0 +1,144 @@
+{
+  "Description":"Create Lambda function to query a database and the API Gateway REST API to invoke the function",
+
+  "Metadata":{
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label" : { "default" : "Time Intervals" },
+        "Parameters" : [ "DeleteIntervalTime", "LockIntervalTime","ExecutionRate" ]
+      },
+      {
+        "Label" : { "default":"VPC Connection Details" },
+        "Parameters" : [ "SubnetIds", "SecurityGroupIds" ]
+      }
+    ]
+  }
+  },
+
+  "Parameters": {
+     "SecretName": {
+        "Description": "Lambda SECRET Value for fetching DB Credentials. Secret must be created using RDS Option while creation ",
+        "Type": "String",
+        "AllowedPattern" : ".+",
+        "ConstraintDescription" : "Please specify a valid secret for fetching DB credentials from Secrets Manager."
+     },
+     "LambdaFunctionName": {
+        "Description": "Lambda function name.",
+        "Type": "String",
+        "AllowedPattern" : ".+",
+        "ConstraintDescription" : "Please specify a valid name for lambda function."
+     },
+     "DeleteIntervalTime": {
+        "Description": "Lambda Delete Time Interval Value in Days. Value of 0 or negative number will not delete any user.",
+        "Default":"0",
+        "Type": "String"
+     },
+     "LockIntervalTime": {
+        "Description": "Lambda Lock Time Interval Value in Days. Value of 0 or negative number will not lock any user.",
+        "Default":"0",
+        "Type": "String"
+     },
+     "LogLevel": {
+        "Description": "Lambda Log level Value",
+        "Default":"INFO",
+        "AllowedValues" : ["DEBUG", "INFO", "WARNING", "ERROR","CRITICAL"],
+        "Type": "String"
+     },
+     "IgnoreUserList": {
+        "Description": "List of users to be ignored in addition to rdsadmin and masteruser. For example to ignore test1, test2 and test3 users, provide the list as [\"test1\",\"test2\",\"test3\"]",
+        "Default":"None",
+        "Type": "String"
+     },
+     "ExecutionRate":{
+        "Description": "Lambda Execution Rate",
+        "Default":"24 hours",
+        "AllowedValues" : ["3 minutes","10 minutes", "30 minutes", "1 hours", "12 hours","24 hours","8 days"],
+        "Type": "String"
+     },
+     "S3Bucket": {
+        "Description": "Lambda S3Bucket Value. S3 bucket must be in the same region as Lambda function.Zip should be available at the first level of the S3 bucket itself. No sub-folders allowed.",
+        "Type": "String",
+        "AllowedPattern" : ".+",
+        "ConstraintDescription" : "Please specify a valid S3 Bucket to fetch the code for Lock and Delete User functionality."
+     },
+     "SubnetIds": {
+        "Description": "Subnet(s) in which you want the Lambda function to run (Choose one or more available subnets)",
+        "Type": "List<AWS::EC2::Subnet::Id>",
+        "ConstraintDescription" : "Please specify Subnet ID (In case of more than one, provide comma separated String values)"
+     },
+     "SecurityGroupIds": {
+        "Description": "SecurityGroup(s) to associate with Lambda Function (Choose one or more available Security Groups)",
+        "Type": "List<AWS::EC2::SecurityGroup::Id>",
+        "ConstraintDescription" : "Please specify security group ID."
+     },
+     "LambdaIAMRole": {
+        "Description": "ARN of Lambda IAM role which has access to execute Lambda Function, read from Secretes Manager as well as read and write to Cloud Watch",
+        "Type": "String",
+        "ConstraintDescription" : "Please specify valid ARN of IAM Role."
+     },
+     "HttpsProxy": {
+        "Description": "Value of https_proxy which needs to be used for internet bound requests.",
+        "Type": "String",
+        "Default":"None",
+        "ConstraintDescription" : "Please specify valid Https_Proxy."
+     }
+  },
+
+  "Resources": {
+
+    "LockNDeleteUserLambdaFunction": {
+       "Description": "Create Lambda function using code from S3 bucket",
+       "Type": "AWS::Lambda::Function",
+       "Properties": {
+          "FunctionName": {"Ref": "LambdaFunctionName"},
+          "Handler": "LockNDeleteUser.handler",
+          "Role": {"Ref": "LambdaIAMRole"},
+          "Code": {
+             "S3Bucket": {"Ref": "S3Bucket"},
+             "S3Key": "LockNDeleteUser.zip"
+          },
+          "Runtime": "python3.6",
+          "Timeout": 60,
+          "VpcConfig": {
+             "SubnetIds":{"Ref": "SubnetIds"},
+             "SecurityGroupIds":{"Ref": "SecurityGroupIds"}
+          },
+          "Environment":{
+             "Variables":{
+                "SECRET_NAME":{"Ref": "SecretName"},
+                "DELETE_INTERVAL_DAYS":{"Ref": "DeleteIntervalTime"},
+                "LOCK_INTERVAL_DAYS":{"Ref": "LockIntervalTime"},
+                "LOG_LEVEL":{"Ref": "LogLevel"},
+                "IGNORE_USER_LIST":{"Ref":  "IgnoreUserList"},
+                "https_proxy":{"Ref":  "HttpsProxy"}
+             }
+          }
+       }
+    },
+    "ScheduledRule": {
+        "Type": "AWS::Events::Rule",
+        "Properties": {
+          "Description": "ScheduledRule",
+          "Name" : {"Ref": "LambdaFunctionName"},
+          "ScheduleExpression": {"Fn::Sub": [ "rate(${ExecRate})", { "ExecRate": {"Ref" : "ExecutionRate" }} ] },
+          "State": "ENABLED",
+          "Targets": [{
+            "Arn": { "Fn::GetAtt": ["LockNDeleteUserLambdaFunction", "Arn"] },
+            "Id": "ScheduledRule"
+          }]
+        }
+    },
+    "PermissionForEventsToInvokeLambda": {
+        "Type": "AWS::Lambda::Permission",
+        "Properties": {
+          "FunctionName": { "Ref": "LockNDeleteUserLambdaFunction" },
+          "Action": "lambda:InvokeFunction",
+          "Principal": "events.amazonaws.com",
+          "SourceArn": { "Fn::GetAtt": ["ScheduledRule", "Arn"] }
+        }
+    }
+   }
+}
+
+
