@@ -136,6 +136,8 @@ lock_user_status_update = "UPDATE user_login_status SET status='newStatus' where
 
 delete_inactive_user = "DROP USER some_user;"
 
+active_user_count = "select count(1) from pg_stat_activity where usename='checkuser';"
+
 # Log Level gets decided based upon user's input. Default is INFO.
 logging.basicConfig()
 logger = logging.getLogger("logger")
@@ -259,7 +261,6 @@ def getClusterDetails(cluster_identifier):
     response = rds.describe_db_clusters(
         DBClusterIdentifier=cluster_identifier)
     dbClusters = response['DBClusters']
-    # print(dbClusters)
     return dbClusters
 
 # Creates utility specific tables to keep track of users login activity and login activity on specific instance.
@@ -465,18 +466,20 @@ def manageInactiveUsers():
         for user in users_list:
                 if (delete_interval_milliseconds > 0 and unixTimeMillis(currentTime[0][0].replace(tzinfo=None)) - unixTimeMillis(
                     user[1].replace(tzinfo=None)) >= delete_interval_milliseconds):
-                    if(user[2] == 'A' or user[2] == 'L'):
-                       updateDatabase(delete_inactive_user.replace('some_user', user[0]),user[0])
-                       count += 1
-                    elif (user[2] == 'R'):
-                        logger.info("User " + user[0] + " is already marked as ready for delete. Please take an appropriate action.")
+		    if(fetchFromDatabase(active_user_count.replace("checkuser",user[0]))[0][0] == 0): #Checking if the user has active connection going on
+			 if(user[2] == 'A' or user[2] == 'L'):
+			    updateDatabase(delete_inactive_user.replace('some_user', user[0]),user[0])
+			    count += 1
+			 elif (user[2] == 'R'):
+			    logger.info("User " + user[0] + " is already marked as ready for delete. Please take an appropriate action.")
                 elif (lock_interval_milliseconds > 0 and unixTimeMillis(currentTime[0][0].replace(tzinfo=None)) - unixTimeMillis(
                         user[1].replace(tzinfo=None)) >= lock_interval_milliseconds):
                     if (user[2] == 'A'):
-                        updateDatabase(lock_user.replace('some_user', user[0]))
-                        updateDatabase(lock_user_status_update.replace('userID', user[0]).replace('newStatus', 'L'))
-                        logger.info("Locking user " + user[0])
-                        count += 1
+		        if (fetchFromDatabase(active_user_count.replace("checkuser", user[0]))[0][0] == 0):  # Checking if the user has active connection going on
+                            updateDatabase(lock_user.replace('some_user', user[0]))
+                            updateDatabase(lock_user_status_update.replace('userID', user[0]).replace('newStatus', 'L'))
+                            logger.info("Locking user " + user[0])
+                            count += 1
                     elif (user[2] == 'L'):
                         logger.info("User " + user[
                             0] + " is already marked as locked. Please take an appropriate action.")
