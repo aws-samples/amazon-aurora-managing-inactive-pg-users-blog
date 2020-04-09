@@ -105,7 +105,7 @@ FROM
    information_schema.tables
 WHERE
    table_type='BASE TABLE'
-   AND 
+   AND
    table_schema='public'"""
 
 check_table = [
@@ -464,28 +464,28 @@ def manageInactiveUsers():
     count = 0
     if delete_interval_milliseconds > 0 or lock_interval_milliseconds > 0 :
         for user in users_list:
-                if (delete_interval_milliseconds > 0 and unixTimeMillis(currentTime[0][0].replace(tzinfo=None)) - unixTimeMillis(
+            if (delete_interval_milliseconds > 0 and unixTimeMillis(currentTime[0][0].replace(tzinfo=None)) - unixTimeMillis(
                     user[1].replace(tzinfo=None)) >= delete_interval_milliseconds):
-		    if(fetchFromDatabase(active_user_count.replace("checkuser",user[0]))[0][0] == 0): #Checking if the user has active connection going on
-			 if(user[2] == 'A' or user[2] == 'L'):
-			    updateDatabase(delete_inactive_user.replace('some_user', user[0]),user[0])
-			    count += 1
-			 elif (user[2] == 'R'):
-			    logger.info("User " + user[0] + " is already marked as ready for delete. Please take an appropriate action.")
-                elif (lock_interval_milliseconds > 0 and unixTimeMillis(currentTime[0][0].replace(tzinfo=None)) - unixTimeMillis(
+                if(fetchFromDatabase(active_user_count.replace("checkuser",user[0]))[0][0] == 0): #Checking if the user has active connection going on
+                    if(user[2] == 'A' or user[2] == 'L'):
+                        updateDatabase(delete_inactive_user.replace('some_user', user[0]),user[0])
+                        count += 1
+                    elif (user[2] == 'R'):
+                        logger.info("User " + user[0] + " is already marked as ready for delete. Please take an appropriate action.")
+            elif (lock_interval_milliseconds > 0 and unixTimeMillis(currentTime[0][0].replace(tzinfo=None)) - unixTimeMillis(
                         user[1].replace(tzinfo=None)) >= lock_interval_milliseconds):
-                    if (user[2] == 'A'):
-		        if (fetchFromDatabase(active_user_count.replace("checkuser", user[0]))[0][0] == 0):  # Checking if the user has active connection going on
-                            updateDatabase(lock_user.replace('some_user', user[0]))
-                            updateDatabase(lock_user_status_update.replace('userID', user[0]).replace('newStatus', 'L'))
-                            logger.info("Locking user " + user[0])
-                            count += 1
+                if (user[2] == 'A'):
+                    if (fetchFromDatabase(active_user_count.replace("checkuser", user[0]))[0][0] == 0):  # Checking if the user has active connection going on
+                        updateDatabase(lock_user.replace('some_user', user[0]))
+                        updateDatabase(lock_user_status_update.replace('userID', user[0]).replace('newStatus', 'L'))
+                        logger.info("Locking user " + user[0])
+                        count += 1
                     elif (user[2] == 'L'):
-                        logger.info("User " + user[
-                            0] + " is already marked as locked. Please take an appropriate action.")
+                        logger.info("User " + user[0] + " is already marked as locked. Please take an appropriate action.")
 
     if (count == 0):
         logger.info("No users to delete or lock. All users are active users.")
+
 
 # Converts UTC time in Unix time.
 def unixTimeMillis(dt):
