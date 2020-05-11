@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Lock and Delete User Utility provides an ability to identify the Aurora PostgreSQL users login activity and identify
+# This sample Lock and Delete User Utility provides an ability to identify the Aurora PostgreSQL users login activity and identify
 # them if they are eligible for locking or deleting as per the company standards
 
 # Copyright 2019 Amazon.com, Inc. or its affiliates.
